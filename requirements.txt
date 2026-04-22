@@ -1,0 +1,7 @@
+streamlit
+crawl4ai
+google-generativeai
+pydantic  
+python-dotenv
+pandas     
+playwright
