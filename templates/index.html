@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Web Scraper</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    input, textarea, select { width: 100%; padding: 8px; margin: 6px 0 14px; box-sizing: border-box; }
+    button { padding: 10px 24px; background: #333; color: white; border: none; cursor: pointer; }
+    button:disabled { background: #999; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 13px; }
+    th { background: #f0f0f0; }
+    #summary { background: #f9f9f9; padding: 14px; border-left: 3px solid #333; margin-top: 16px; white-space: pre-wrap; }
+    #status { color: #555; margin: 10px 0; }
+    #download { display: none; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>AI Web Scraper</h2>
+
+  <label>Website URL</label>
+  <input type="text" id="url" placeholder="https://example.com" />
+
+  <label>Fields to Extract (one per line)</label>
+  <textarea id="fields" rows="4" placeholder="company name&#10;email&#10;phone&#10;price"></textarea>
+
+  <label>Max Pages to Crawl</label>
+  <input type="number" id="max_pages" value="3" min="1" max="20" style="width:100px" />
+
+  <br/>
+  <button id="btn" onclick="startScrape()">Start Scraping</button>
+  <p id="status"></p>
+
+  <div id="output" style="display:none">
+    <h3>Extracted Data</h3>
+    <div id="table_container"></div>
+
+    <h3>AI Summary</h3>
+    <div id="summary"></div>
+
+    <button id="download" onclick="downloadCSV()">Download CSV</button>
+  </div>
+
+  <script>
+    let resultData = [];
+
+    async function startScrape() {
+      const url = document.getElementById("url").value.trim();
+      const fields = document.getElementById("fields").value.trim();
+      const max_pages = document.getElementById("max_pages").value;
+
+      if (!url || !fields) return alert("Please enter URL and fields.");
+
+      document.getElementById("btn").disabled = true;
+      document.getElementById("status").innerText = "Scraping... please wait.";
+      document.getElementById("output").style.display = "none";
+
+      try {
+        const res = await fetch("/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, fields, max_pages })
+        });
+        const data = await res.json();
+        resultData = data.results;
+
+        renderTable(data.results);
+        document.getElementById("summary").innerText = data.summary;
+        document.getElementById("output").style.display = "block";
+        document.getElementById("download").style.display = "inline-block";
+        document.getElementById("status").innerText = `Done. Scraped ${data.results.length} page(s).`;
+      } catch (err) {
+        document.getElementById("status").innerText = "Error: " + err.message;
+      }
+
+      document.getElementById("btn").disabled = false;
+    }
+
+    function renderTable(results) {
+      if (!results.length) return;
+      const keys = Object.keys(results[0]);
+      let html = "<table><thead><tr>" + keys.map(k => `<th>${k}</th>`).join("") + "</tr></thead><tbody>";
+      results.forEach(row => {
+        html += "<tr>" + keys.map(k => `<td>${row[k] ?? ""}</td>`).join("") + "</tr>";
+      });
+      html += "</tbody></table>";
+      document.getElementById("table_container").innerHTML = html;
+    }
+
+    function downloadCSV() {
+      if (!resultData.length) return;
+      const keys = Object.keys(resultData[0]);
+      const rows = [keys.join(","), ...resultData.map(r => keys.map(k => `"${r[k] ?? ""}"`).join(","))];
+      const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "scraped_data.csv";
+      a.click();
+    }
+  </script>
+
+</body>
+</html>
