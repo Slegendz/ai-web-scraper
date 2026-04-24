@@ -1,7 +1,9 @@
-streamlit
 crawl4ai
 google-generativeai
-pydantic  
+fastapi
+uvicorn[standard]
+nest-asyncio
+pydantic
 python-dotenv
-pandas     
+pandas
 playwright
