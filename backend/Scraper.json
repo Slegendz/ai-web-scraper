@@ -1,0 +1,1073 @@
+{
+  "name": "Scraper 2",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "={{ $json.body.parameters.url }}",
+        "options": {},
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.jinaAi",
+      "typeVersion": 1,
+      "position": [
+        240,
+        96
+      ],
+      "id": "727a9400-6312-421a-bac1-95bd9c205591",
+      "name": "Read URL content",
+      "credentials": {
+        "jinaAiApi": {
+          "id": "NyavQoRHKEcjF6jX",
+          "name": "Jina AI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        4240,
+        -176
+      ],
+      "id": "a82ca6e0-5d5d-491d-8012-9760de79d266",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.first().json.content.parts[0].text\n\nif (!rawText) {\n  return [{ json: { error: \"No analysis returned\", homepage_sufficient: false, recommended_links: [] } }];\n}\n\ntry {\n  const analysis = JSON.parse(rawText);\n  return [{ json: analysis }];\n} catch (e) {\n  return [{ json: { error: \"Parse failed: \" + e.message, homepage_sufficient: false, recommended_links: [] } }];\n}"
+      },
+      "id": "a5d01ba5-fa88-492a-9cdf-65835c4fb8ad",
+      "name": "Parse Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2192,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $input.first().json;\nconst links = analysis.recommended_links || [];\n\nreturn links.map(url => ({ json: { url, attempted: false, success: false } }));"
+      },
+      "id": "ae988b4a-4296-4c65-b35e-435a661b0f9c",
+      "name": "Prepare Links for Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {},
+        "requestOptions": {}
+      },
+      "id": "0d415ab2-db93-4a7e-817d-b10e0021ae10",
+      "name": "Scrape Link",
+      "type": "n8n-nodes-base.jinaAi",
+      "typeVersion": 1,
+      "position": [
+        2848,
+        128
+      ],
+      "credentials": {
+        "jinaAiApi": {
+          "id": "NyavQoRHKEcjF6jX",
+          "name": "Jina AI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### ROLE\nYou are a data validation expert. Determine if the scraped content contains the required fields.\n\n### INPUT DATA\n1. **Target Fields:** {{ $(\"Webhook\").item.json.body.parameters.fields }}\n2. **Missing Fields:** {{ $('Webhook').item.json.body.parameters.fields }}\n3. **Current URL:** {{ $json.url }}\n4. **Scraped Content:** {{ $json.content }}\n\n### TASK\nDetermine if this page contains sufficient data for the missing fields. Extract the data if present.\n\n### OUTPUT FORMAT\nReturn ONLY a valid JSON object:\n{\n  \"is_sufficient\": true/false,\n  \"reasoning\": \"explanation\",\n  \"extracted_data\": { \"field1\": \"value1\" } or null\n}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "8b1da9c0-67ea-4fdd-bdc7-8b762b19d04f",
+      "name": "Validate Scraped Data",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        3024,
+        128
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Rd8GP00OciqBFeJC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.first().json.content?.parts?.[0]?.text;\n\nif (!rawText) {\n  return [{ json: { is_sufficient: false, reasoning: \"No validation response\", extracted_data: null, url: $input.first().json.url } }];\n}\n\ntry {\n  const validation = JSON.parse(rawText);\n  return [{ json: { ...validation, url: $(\"Scrape Link\").item.json.url } }];\n} catch (e) {\n  return [{ json: { is_sufficient: false, reasoning: \"Parse error: \" + e.message, extracted_data: null, url: $input.first().json.url } }];\n}"
+      },
+      "id": "39590f5f-790b-4c24-bebe-3a01dc1b4a07",
+      "name": "Parse Validation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3312,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.is_sufficient }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ef1a0be6-75dd-415e-ab83-905efb33f239",
+      "name": "Check If Data Sufficient",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3680,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "valid_data",
+              "value": "={{ $json.extracted_data }}",
+              "type": "object"
+            },
+            {
+              "id": "2",
+              "name": "source_url",
+              "value": "={{ $json.url }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "reasoning",
+              "value": "={{ $json.reasoning }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fe860687-3846-4c39-af8d-6c8145088406",
+      "name": "Store Valid Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3840,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "93ac3266-d5aa-4671-975d-79ee70691003",
+      "name": "Loop Through Links",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2624,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-flash-latest",
+          "mode": "list",
+          "cachedResultName": "models/gemini-flash-latest"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### ROLE\nYou are a data extraction specialist. Extract the requested fields from the homepage content in json format.\n\n### INPUT DATA\n1. **Target Fields:**{{ $('Webhook').item.json.body.parameters.fields }}\n2. **Homepage Content:** {{ $json.content }}\n\n**OUTPUT\n\nRemove any unecesary symbols in json format so output should be cleaned and well formatted."
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "20914f0a-2042-4bfd-9100-15cf68ef4507",
+      "name": "Extract Homepage Data",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        16
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Rd8GP00OciqBFeJC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.first().json.content?.parts?.[0]?.text;\n\nif (!rawText) {\n  return [{ json: { error: \"No data extracted\", extracted_data: {} } }];\n}\n\ntry {\n  const parsed = JSON.parse(rawText);\n  return [{ json: { extracted_data: parsed, source: \"homepage\" } }];\n} catch (e) {\n  return [{ json: { error: \"Parse failed: \" + e.message, extracted_data: {} } }];\n}"
+      },
+      "id": "354ae4b9-f382-4103-89b4-2dda5c9fb7ad",
+      "name": "Parse Homepage Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.homepage_sufficient }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "956bbebf-9781-47e9-88a9-a97b6fadb815",
+      "name": "Check If Homepage Sufficient",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1552,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "8408776a-dee4-4230-802f-2db24339cd54",
+      "name": "Aggregate Link Data",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2848,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length === 0 || !items[0].json.valid_data) {\n  return [{ json: { success: false, message: \"Data not found\", timestamp: new Date().toISOString() } }];\n}\n\nconst validDataArray = items[0].json.valid_data;\nconst sources = items[0].json.source_url;\n\nconst mergedData = validDataArray.reduce((acc, curr) => ({ ...acc, ...curr }), {});\n\nreturn [{ json: { success: true, data: mergedData, sources, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "64d28ac6-3533-458c-aef7-c060d0382c81",
+      "name": "Format Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3104,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.first().json.content?.parts?.[0]?.text;\nconst extractedData = $(\"Parse Homepage Data\").item.json.extracted_data;\n\nif (!rawText) {\n  return [{ json: { homepage_sufficient: false, extracted_data: extractedData, reasoning: \"No validation response\" } }];\n}\n\ntry {\n  const validation = JSON.parse(rawText);\n  return [{ json: { ...validation, extracted_data: extractedData, source: \"homepage\" } }];\n} catch (e) {\n  return [{ json: { homepage_sufficient: false, extracted_data: extractedData, reasoning: \"Parse error: \" + e.message } }];\n}"
+      },
+      "id": "be096a17-6d0b-400b-a442-bdc4306504e9",
+      "name": "Parse Sufficiency Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9cce4699-5477-4e08-aad4-e98368d7194c",
+              "leftValue": "={{ $json.warning }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        96
+      ],
+      "id": "d853e507-1548-4a21-b00d-ea17c58dbffc",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### ROLE\nYou are a strict data validation expert.\n\n### INPUT DATA\n1. Requested Fields: {{ $(\"Webhook\").item.json.body.parameters.fields }}\n2. Extracted Data (JSON Array): {{ JSON.stringify($json.extracted_data, null, 2) }}\n\n### VALIDATION RULES\n\n1. STRUCTURE CHECK\n- Data must be a non-empty ARRAY of objects\n\n2. FIELD COMPLETENESS\n- EACH object must contain ALL requested fields\n- Values must not be null, empty, or placeholders\n\n3. DATA SUFFICIENCY (VERY IMPORTANT)\n- The dataset must contain MULTIPLE items (not just 1 or 2)\n- Minimum acceptable items: 5 (or more depending on context)\n- Data should not be shallow (e.g., just title + 1 short line)\n\n4. QUALITY CHECK\n- Data should represent meaningful, usable content\n- Not partial previews or incomplete snippets\n\n### DECISION RULES\nReturn homepage_sufficient = true ONLY IF:\n- At least 5+ valid objects exist\n- AND each object contains all requested fields\n- AND data appears complete (not shallow or preview-like)\n\nOtherwise return false\n\n### OUTPUT\nReturn ONLY valid JSON:\n\n{\n  \"homepage_sufficient\": true/false,\n  \"reasoning\": \"...\",\n  \"missing_or_incomplete_fields\": []\n}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "1271e033-6c79-4725-9e97-a4639b6e4cf7",
+      "name": "Validate Homepage Sufficiency",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        16
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Rd8GP00OciqBFeJC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3472,
+        128
+      ],
+      "id": "073a6f1d-2eef-4eb4-9ff6-d41ab95c542c",
+      "name": "Wait",
+      "webhookId": "8ad2eade-7145-409e-8983-b568bae4ee32"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### ROLE\nYou are an expert Data Extraction Architect. Your goal is to map user data requirements to the most high-probability URLs found within a website's structure.\n\n\n\n### INPUT DATA\n\n1. **Target Fields to Extract:** {{ $(\"Webhook\").item.json.body.parameters.fields }}\n2. **Candidate URLs for Further Scraping:** {{ $('Firecrawl (Agentic Scraping, Crawl)').item.json.data.links }}\n\n### TASK\n\nPerform a check to find which are all the urls that can contain the target fields within it. Don't visit the links just select some of them based on reasoning if the values of links and target are matching.\n\n1. **Link Heuristics:** Analyze the list of \"Candidate URLs.\" Rank them based on semantic relevance to the missing fields. (e.g., if \"Price\" is missing, look for URLs containing \"/product/\", \"/pricing/\", or \"/shop/\").\n\n2. **Select High-Value Targets:** Identify the top 3-10 URLs that are most likely to contain the missing granular data.\n\n### REASONING REQUIREMENTS\n\n- **Presence Check:** List which fields are explicitly visible on the homepage.\n- **URL Pattern Matching:** Explain why specific links were chosen (e.g., \"Recommended '/about-us' because the 'Founding Year' field is likely there\").\n\n### OUTPUT FORMAT\nReturn ONLY a valid JSON object. Do not include markdown formatting or preamble.\n\n{\n  \"recommended_links\": [\n    \"https://example.com/target-link-1\",\n    \"https://example.com/target-link-2\"\n  ],\n}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "f9d8bb80-8dbe-4ab4-9461-2138f23bc5bc",
+      "name": "Analyze Links Content",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        128
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Rd8GP00OciqBFeJC",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $('Read URL content').first().json.content;\nconst urlRegex = /https?:\\/\\/[^\\s\\)\\]]+/g;\nconst links = content.match(urlRegex) || [];\n\nconst validLinks = [...new Set(links)].filter(link => {\n    const isImage = /\\.(png|jpg|jpeg|gif|webp|svg|bmp|ico|tiff)(\\?.*)?$/i.test(link);\n    return !isImage;\n});\n\nreturn {\n    json: {\n        all_links: validLinks \n    }\n};"
+      },
+      "id": "ac99efea-c9de-45f3-bd87-1ba5e3b131f4",
+      "name": "Extract Links",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# AI Web Scraper\n",
+        "height": 816,
+        "width": 4544,
+        "color": "#287B7A"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -32,
+        -288
+      ],
+      "typeVersion": 1,
+      "id": "432d5c30-6064-421f-8192-2239172c5f2a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Trigger to scrape\n",
+        "height": 368,
+        "width": 368,
+        "color": "#852323"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        16,
+        -16
+      ],
+      "typeVersion": 1,
+      "id": "1a0aef48-1375-4554-906d-679ece9e2f8b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"warning\":  $json.warning} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        608,
+        256
+      ],
+      "id": "ac5673f5-7681-4995-a9d7-832fafc1a2d7",
+      "name": "Error Response",
+      "notes": "Captcha, Warnings, Failed to fetch"
+    },
+    {
+      "parameters": {
+        "content": "## Validate Scraped Content via LLM (First Page Itself)\n ",
+        "height": 304,
+        "width": 912,
+        "color": "#226837"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        576,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "b9ad7632-05c6-445e-8c20-3b7c87688db1",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"data\": $json.extracted_data, \"source\": \"homepage\", \"timestamp\": $now.toISO() } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "3c8f7c2b-fb37-4d95-859b-9105cd3f98f0",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1744,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Analyze and Identify Important Links\n",
+        "height": 304,
+        "width": 816,
+        "color": "#716909"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1712,
+        32
+      ],
+      "typeVersion": 1,
+      "id": "6c27c8d1-92a5-4965-8b80-c997b83ddda1",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Aggregate Results and Sends Response\n",
+        "height": 240,
+        "width": 512,
+        "color": "#1B5417"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2784,
+        -256
+      ],
+      "typeVersion": 1,
+      "id": "df8d4caa-ecf7-4729-aa35-89d33d7becc8",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "# Tools to Consider\n",
+        "height": 432,
+        "width": 1152,
+        "color": "#A15959"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1456,
+        -752
+      ],
+      "typeVersion": 1,
+      "id": "e9cf5e12-b8fe-4be6-80d5-a599fd84f77d",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-pro",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        -464
+      ],
+      "id": "9896e7a4-94d2-4292-a486-98d8e4ec2e17",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "eSQsdrDnzWBYuxQP",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "needsFallback": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1568,
+        -640
+      ],
+      "id": "22b9451c-e4b2-495f-9537-9f1291022fa4",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        -464
+      ],
+      "id": "38b5beaa-1aaa-40c1-9677-59225b509888",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "SjCBaBRWs2hqfHBd",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "scrape",
+        "url": "={{ $json.body.parameters.url }}",
+        "scrapeOptions": {
+          "options": {
+            "formats": {
+              "format": [
+                {},
+                {
+                  "type": "links"
+                }
+              ]
+            },
+            "includeTags": {
+              "items": []
+            },
+            "headers": {}
+          }
+        },
+        "requestOptions": {}
+      },
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        -656
+      ],
+      "id": "db3104ee-aa59-4372-957a-41217013db99",
+      "name": "Firecrawl (Agentic Scraping, Crawl)",
+      "credentials": {
+        "firecrawlApi": {
+          "id": "idUBIFivf4AJfpmH",
+          "name": "Firecrawl API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Scrape and validate each url\n",
+        "height": 288,
+        "width": 816,
+        "color": "#7E3380"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2784,
+        32
+      ],
+      "typeVersion": 1,
+      "id": "a7d0bf27-e075-49db-b101-f8214dc62e43",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.first().json.valid_data"
+      },
+      "id": "8c237984-1622-4d07-b81e-729c777e24d2",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4016,
+        16
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "## Format Response\n",
+        "height": 240,
+        "width": 400,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3792,
+        -48
+      ],
+      "typeVersion": 1,
+      "id": "4b9d4ac6-8f9c-44ae-ada9-26dfae0d8ffe",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scrape",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        64,
+        96
+      ],
+      "id": "ae8d9d85-b19b-41a1-afb3-7114c9218875",
+      "name": "Webhook",
+      "webhookId": "e1bd78ea-1299-43a6-85c0-ed1dfa278967"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Read URL content": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Parse Analysis": {
+      "main": [
+        [
+          {
+            "node": "Prepare Links for Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Links for Loop": {
+      "main": [
+        [
+          {
+            "node": "Loop Through Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Link": {
+      "main": [
+        [
+          {
+            "node": "Validate Scraped Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Scraped Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Validation": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Data Sufficient": {
+      "main": [
+        [
+          {
+            "node": "Store Valid Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Through Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Valid Data": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Through Links": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Link Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Homepage Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Homepage Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Homepage Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Homepage Sufficiency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Homepage Sufficient": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Link Data": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Sufficiency Check": {
+      "main": [
+        [
+          {
+            "node": "Check If Homepage Sufficient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Extract Homepage Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Homepage Sufficiency": {
+      "main": [
+        [
+          {
+            "node": "Parse Sufficiency Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Check If Data Sufficient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Links Content": {
+      "main": [
+        [
+          {
+            "node": "Parse Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Links": {
+      "main": [
+        [
+          {
+            "node": "Analyze Links Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Response": {
+      "main": [
+        []
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Firecrawl (Agentic Scraping, Crawl)": {
+      "main": [
+        []
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read URL content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7821cce2-bd89-440f-a6b4-656529fc852c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "51a7cdad4fd741dc657b5300924ee61c11602e62d6c461a6ca9023370e06a1a5"
+  },
+  "id": "8xDIypcXcM6MQoIH",
+  "tags": []
+}

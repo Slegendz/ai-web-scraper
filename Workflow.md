@@ -4,7 +4,7 @@ Recommended Tech Stack:
 
 1. Language: Python
 2. Library: Crawl4AI (Excellent for AI-ready web scraping) / Playwright (Bypasses captcha)
-3. UI: Streamlit (You can build a web interface in 20 lines of code)
+3. UI: Streamlit or NextJs app (Can build a web interface in 20 lines of code or Next js approach)
 4. AI API: Google Gemini API (High rate limits for free-tier users)
 
 ## Converting html to markdown for better ai usage (With using playwright)
@@ -38,3 +38,8 @@ Crawl4AI is specifically designed to output clean, structured Markdown. It is a 
 2. Structured Format: The output maintains logical structures, including preserved links and formatted headings.
 3. Alternative Formats: In addition to Markdown, Crawl4AI can provide results in JSON, cleaned HTML, and even screenshots or PDFs.
 4. LLM Integration: It can use an LLM extraction strategy to further refine this Markdown into specific structured JSON fields based on a provided schema.
+
+## Final Approach
+
+1. N8N Workflow with NextJs Ui (Main approach using Jina Ai, LLM models for Reasoning and Webhook for respond and response)
+2. Flask & NextJs Ui (Fallback approach using Flask for backend and NextJs for frontend using LLM Model for Reasoning)

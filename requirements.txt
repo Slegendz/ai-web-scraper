@@ -1,9 +1,0 @@
-crawl4ai
-google-generativeai
-fastapi
-uvicorn[standard]
-nest-asyncio
-pydantic
-python-dotenv
-pandas
-playwright
